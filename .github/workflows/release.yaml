@@ -1,0 +1,55 @@
+name: Build main branch
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  publish_github_packages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18.18.0
+          registry-url: 'https://npm.pkg.github.com'
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+        env:
+          HUSKY: 0
+          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      - name: Build
+        if: github.actor != 'sib-travis'
+        run: yarn build
+
+      - name: 📣 Create Release Pull Request or Publish to npm
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          title: "UT-000 | chore(release): version packages 🦋"
+          # publish command should build library and call changeset publish
+          # it also accepts several flags including `--tag` to specify npm tag
+          publish: yarn publish:packages
+          # changesets increments the version in package.json according
+          # to changesets files it detects and `npm i` updates lockfile
+          version: yarn version:packages
+          commit: "chore(release): version packages 🦋"
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
